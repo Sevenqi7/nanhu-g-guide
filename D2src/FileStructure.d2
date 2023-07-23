@@ -1,0 +1,210 @@
+"": {
+    shape:image
+    icon: https://xiangshan-doc.readthedocs.io/zh_CN/latest/figs/LOGO.png
+    near: top-center
+}
+
+src: core{
+    grid-gap: 20
+    grid-rows: 1
+    style: {
+        stroke: blue
+        fill: lightblue
+        font-size: 14
+    }
+
+    frontend: {
+        grid-gap: 15
+        grid-rows: 4
+        grid-columns: 1
+        style: {
+            fill: orange
+            font-size: 14
+        }
+    
+        icache: {
+            style: {
+                fill: ivory
+                font-size: 14
+            }  
+        }
+    
+        BPU: {
+            style: {
+                fill: ivory
+                font-size: 14
+            }  
+        }
+    
+        FTQ: {
+            style: {
+                fill: ivory
+                font-size: 14
+            }  
+        }
+    
+        pre-decoder: {
+            style: {
+                fill: ivory
+                font-size: 14
+            }  
+        }    
+    }
+
+    cache: {
+        grid-gap: 10
+        grid-rows: 4
+        grid-columns: 1
+        style: {
+            fill: khaki
+            font-size: 14
+        }
+
+        dcache: {
+            style: {
+                fill: pink
+                font-size: 14
+            }
+        }
+
+        mmu: {
+            style: {
+                fill: pink
+                font-size: 14
+            }
+        }
+
+        prefetch: {
+            style: {
+                fill: pink
+                font-size: 14
+            }
+        }
+
+        cacheInsts: {
+            style: {
+                fill: pink
+                font-size: 14
+            }
+        }
+    }
+
+    backend: {     
+        grid-gap: 10
+        grid-columns: 2
+        style: {
+            fill: peru
+            font-size: 14
+        }
+
+        decoder: {
+            style: {
+                fill: lightgreen
+                font-size: 14
+            }
+        }
+
+        dispatch: {
+            style: {
+                fill: lightgreen
+                font-size: 14
+            }
+        }
+
+        EXU: {
+            style: {
+                fill: lightgreen
+                font-size: 14
+            }
+        }
+
+        FU: {
+            grid-gap: 10
+            grid-rows: 1
+            style: {
+                fill: lightgreen
+                font-size: 14
+            }
+
+            ALU: {
+                style: {
+                    fill: palevioletred
+                    font-size: 14
+                }
+            }
+
+            CSR: {
+                style: {
+                    fill: palevioletred
+                    font-size: 14
+                }
+            }
+
+            jumpcheck: {
+                style: {
+                    fill: palevioletred
+                    font-size: 14
+                }
+            }
+        }
+
+        issue: {
+            style: {
+                fill: gold
+                font-size: 14
+            }
+        }
+
+        rename: {
+            style: {
+                fill: gold
+                font-size: 14
+            }
+        }
+
+        ROB: {
+            style: {
+                fill: gold
+                font-size: 14
+            }
+        }
+    }
+
+    mem: {
+        grid-gap: 10
+        grid-rows: 4
+        grid-columns: 1
+        style: {
+            fill: salmon
+            font-size: 14
+        }
+
+        LSQ:{
+            style: {
+                fill: grey
+                font-size: 14
+            }
+        }
+
+        store buffer:{
+            style: {
+                fill: grey
+                font-size: 14
+            }
+        }
+
+        L2/L3 cache:{
+            style: {
+                fill: grey
+                font-size: 14
+            }
+        }
+
+        LS pipeline:{
+            style: {
+                fill: grey
+                font-size: 14
+            }
+        }
+    }
+}
