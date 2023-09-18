@@ -71,6 +71,8 @@ trait DecodeUnitConstants
 /**
  * Decode constants for RV64
  */
+//!NOTE: 这里的List要求参数为BitPat，但诸如SrcType.reg类的参数都为UInt
+//!NOTE: UInt->BitPat的转换不是CHISEL自有的，而是在RocketChip的util(见rocket-chip/src/main/scala/util/package.scala)中定义
 object X64Decode extends DecodeConstants {
   val table: Array[(BitPat, List[BitPat])] = Array(
     LD      -> List(SrcType.reg, SrcType.imm, SrcType.X, FuType.ldu, LSUOpType.ld,  Y, N, N, N, N, N, SelImm.IMM_I),
@@ -561,6 +563,7 @@ case class Imm_LUI_LOAD() {
 /**
  * IO bundle for the Decode unit
  */
+// ?: 为什么命名名称是enq和deq? DecodeUnit中似乎没有队列的设计
 class DecodeUnitIO(implicit p: Parameters) extends XSBundle {
   val enq = new Bundle { val ctrl_flow = Input(new CtrlFlow) }
   val deq = new Bundle { val cf_ctrl = Output(new CfCtrl) }
@@ -577,7 +580,7 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val cf_ctrl = Wire(new CfCtrl)
 
   ctrl_flow := io.enq.ctrl_flow
-
+  
   val decode_table = XDecode.table ++
     FDecode.table ++
     FDivSqrtDecode.table ++
@@ -587,6 +590,9 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     CBODecode.table ++
     SvinvalDecode.table
   // assertion for LUI: only LUI should be assigned `selImm === SelImm.IMM_U && fuType === FuType.alu`
+  //!NOTE: 用于lui-load指令专用的旁路
+
+  //!NOTE: 判断是否是lui指令的匿名函数. 参数 t 为decode_table中元组的第二项
   val luiMatch = (t: Seq[BitPat]) => t(3).value == FuType.alu.litValue && t.reverse.head.value == SelImm.IMM_U.litValue
   val luiTable = decode_table.filter(t => luiMatch(t._2)).map(_._1).distinct
   assert(luiTable.length == 1 && luiTable.head == LUI, "Conflicts: LUI is determined by FuType and SelImm in Dispatch")
@@ -601,7 +607,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
   val fpDecoder = Module(new FPDecoder)
   fpDecoder.io.instr := ctrl_flow.instr
   cs.fpu := fpDecoder.io.fpCtrl
-
+  
+  //!NOTE: 判断是否是Move指令，若是则直接操作重命名表，而不操作物理寄存器
   val isMove = BitPat("b000000000000_?????_000_?????_0010011") === ctrl_flow.instr
   cs.isMove := isMove && ctrl_flow.instr(RD_MSB, RD_LSB) =/= 0.U
 

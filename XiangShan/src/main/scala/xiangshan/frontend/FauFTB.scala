@@ -54,18 +54,18 @@ class FauFTBWay(implicit p: Parameters) extends XSModule with FauFTBParams {
     val write_tag = Input(UInt(tagSize.W))
     val tag_read = Output(UInt(tagSize.W))
   })
-
+  
   val data = Reg(new FauFTBEntry)
   val tag = Reg(UInt(tagSize.W))
   val valid = RegInit(false.B)
-
+  
   io.resp := data
   io.resp_hit := tag === io.req_tag && valid
   // write bypass to avoid multiple hit
   io.update_hit := ((tag === io.update_req_tag) && valid) ||
-                   ((io.write_tag === io.update_req_tag) && io.write_valid)
+  ((io.write_tag === io.update_req_tag) && io.write_valid)
   io.tag_read := tag
-
+  
   when (io.write_valid) {
     when (!valid) {
       valid := true.B
@@ -76,6 +76,7 @@ class FauFTBWay(implicit p: Parameters) extends XSModule with FauFTBParams {
 }
 
 
+//NOTE: ubtb
 class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
   
   class FauFTBMeta(implicit p: Parameters) extends XSBundle with FauFTBParams {
@@ -99,6 +100,7 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
   ways.foreach(_.io.req_tag := getTag(s1_pc))
 
   // pred resp
+  
   val s1_hit_oh = VecInit(ways.map(_.io.resp_hit)).asUInt
   val s1_hit = s1_hit_oh.orR
   val s1_hit_way = OHToUInt(s1_hit_oh)

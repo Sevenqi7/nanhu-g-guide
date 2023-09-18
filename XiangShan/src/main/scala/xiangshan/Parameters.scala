@@ -39,6 +39,9 @@ case object XSTileKey extends Field[Seq[XSCoreParameters]]
 
 case object XSCoreParamsKey extends Field[XSCoreParameters]
 
+//NOTE: XS核的参数，用rocketchip中的Field构建XSCoreParamsKey对象，在trait HasXSParameter中解构
+//NOTE: XS中的Module和Bundle都采用这种方法
+//NOTE: 知乎上有一篇关于rocketchip中Field和Parameter的专栏：https://zhuanlan.zhihu.com/p/458119171
 case class XSCoreParameters
 (
   HasPrefetch: Boolean = false,
@@ -302,6 +305,8 @@ case class DebugOptions
   AlwaysBasicDB: Boolean = true,
 )
 
+//NOTE: 不是很明白通过roccketchip里的Field和Parameter把参数套个壳的意义
+//NOTE: 可能是为了XSParameter作为对象而言更为独特，但不明白原理。面向对象有待深入学习。
 trait HasXSParameter {
 
   implicit val p: Parameters

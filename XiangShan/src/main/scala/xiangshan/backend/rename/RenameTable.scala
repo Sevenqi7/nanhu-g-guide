@@ -49,6 +49,7 @@ class RenameTable(float: Boolean)(implicit p: Parameters) extends XSModule {
   val spec_table = RegInit(rename_table_init)
   val spec_table_next = WireInit(spec_table)
   // arch state rename table
+  //!NOTE: 用于difftest
   val arch_table = RegInit(rename_table_init)
   val arch_table_next = WireDefault(arch_table)
 

@@ -143,10 +143,11 @@ trait BPUUtils extends HasXSParameter {
 //   def taken = cfi_idx.valid
 // }
 
-
+//NOTE: 分支预测的输入Bundle
 class BasePredictorInput (implicit p: Parameters) extends XSBundle with HasBPUConst {
   def nInputs = 1
 
+  //?:为什么虚拟地址的宽度是39
   val s0_pc = UInt(VAddrBits.W)
 
   val folded_hist = new AllFoldedHistories(foldedGHistInfos)
@@ -160,6 +161,7 @@ class BasePredictorInput (implicit p: Parameters) extends XSBundle with HasBPUCo
   // val s0_all_ready = Bool()
 }
 
+//NOTE：分支预测单元的输出Bundle
 class BasePredictorOutput (implicit p: Parameters) extends BranchPredictionResp {}
 
 class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst {

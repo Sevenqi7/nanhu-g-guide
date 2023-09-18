@@ -70,6 +70,7 @@ object RSFeedbackType {
   def apply() = UInt(3.W)
 }
 
+// ?: 这里的implicit p的作用是什么？
 class PredictorAnswer(implicit p: Parameters) extends XSBundle {
   val hit    = if (!env.FPGAPlatform) Bool() else UInt(0.W)
   val taken  = if (!env.FPGAPlatform) Bool() else UInt(0.W)

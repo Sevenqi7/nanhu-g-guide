@@ -42,9 +42,11 @@ class DecodeStage(implicit p: Parameters) extends XSModule with HasPerfEvents {
       val out = new StallReasonIO(DecodeWidth)
     }
   })
-
+  //!NOTE: 实例化多个译码单元
   val decoders = Seq.fill(DecodeWidth)(Module(new DecodeUnit))
   val debug_globalCounter = RegInit(0.U(XLEN.W))
+
+  //!NOTE: 分发指令到译码单元中
 
   for (i <- 0 until DecodeWidth) {
     decoders(i).io.enq.ctrl_flow <> io.in(i).bits
