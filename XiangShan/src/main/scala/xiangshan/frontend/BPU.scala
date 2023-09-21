@@ -247,6 +247,8 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
   val io = IO(new PredictorIO)
 
   val ctrl = DelayN(io.ctrl, 1)
+  //!NOTE: 根据useBPD的值判断是否启用分支预测。分支预测各模块的实例化代码在XSCoreParameters类中的getBPDComponets函数内
+  //!NOTE: Composer通过getBPDComponents函数实例化各个预测器（BTB、RAS等）
   val predictors = Module(if (useBPD) new Composer else new FakePredictor)
 
   def numOfStage = 3
@@ -295,12 +297,15 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
   val s1_ready, s2_ready, s3_ready = Wire(Bool())
   val s1_components_ready, s2_components_ready, s3_components_ready = Wire(Bool())
 
+  //?: 延迟5拍的原因是?
   val reset_vector = DelayN(io.reset_vector, 5)
   val s0_pc = Wire(UInt(VAddrBits.W))
   val s0_pc_reg = RegNext(s0_pc)
+  //!NOTE: 复位PC值
   when (RegNext(RegNext(reset.asBool) && !reset.asBool)) {
     s0_pc_reg := reset_vector
   }
+
   val s1_pc = RegEnable(s0_pc, s0_fire)
   val s2_pc = RegEnable(s1_pc, s1_fire)
   val s3_pc = RegEnable(s2_pc, s2_fire)
@@ -323,6 +328,8 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
   val s2_ahead_fh_oldest_bits = RegEnable(s1_ahead_fh_oldest_bits, 0.U.asTypeOf(s0_ahead_fh_oldest_bits), s1_fire)
   val s3_ahead_fh_oldest_bits = RegEnable(s2_ahead_fh_oldest_bits, 0.U.asTypeOf(s0_ahead_fh_oldest_bits), s2_fire)
 
+  //!NOTE: 实现的有点抽象的带优先级的多路选择器，实现在PriorityMuxGen.scala类
+  //!NOTE: PhyPriorityMuxGenerator和PriorityMuxGenerator的区别是后者的优先级设置为逻辑上的低路优先（in(0)的优先级最大），而前者在保持了逻辑上的优先顺序的同时还可以手动设置一个Int优先级
   val npcGen   = new PhyPriorityMuxGenerator[UInt]
   val foldedGhGen = new PhyPriorityMuxGenerator[AllFoldedHistories]
   val ghistPtrGen = new PhyPriorityMuxGenerator[CGHPtr]
@@ -471,6 +478,7 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
     )
   )
 
+  //!NOTE: 注册多路选择器的其中一路。第一个参数为选中该路的条件布尔值，第二个参数为要注册到这一路的信号，第三个参数为信号名，第四个参数为优先级
   npcGen.register(s1_valid, resp.s1.getTarget, Some("s1_target"), 4)
   foldedGhGen.register(s1_valid, s1_predicted_fh, Some("s1_FGH"), 4)
   ghistPtrGen.register(s1_valid, s1_predicted_ghist_ptr, Some("s1_GHPtr"), 4)
@@ -653,13 +661,12 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
   val afhob = redirect.cfiUpdate.afhob
   val lastBrNumOH = redirect.cfiUpdate.lastBrNumOH
 
-
   val isBr = redirect.cfiUpdate.pd.isBr
   val taken = redirect.cfiUpdate.taken
   val real_br_taken_mask = (0 until numBr).map(i => shift === (i+1).U && taken && addIntoHist )
 
   val oldPtr = redirect.cfiUpdate.histPtr
-  val oldFh = redirect.cfiUpdate.folded_hist
+  val oldFh  = redirect.cfiUpdate.folded_hist
   val updated_ptr = oldPtr - shift
   val updated_fh = VecInit((0 to numBr).map(i => oldFh.update(afhob, lastBrNumOH, i, taken && addIntoHist)))(shift)
   val thisBrNumOH = UIntToOH(shift, numBr+1)

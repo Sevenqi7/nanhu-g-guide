@@ -99,6 +99,7 @@ case class XSCoreParameters
   SCCtrBits: Int = 6,
   SCHistLens: Seq[Int] = Seq(0, 4, 10, 16),
   numBr: Int = 2,
+  //!NOTE: 这个Function2居然是scala标准库内的trait，命名风格真是随意
   branchPredictor: Function2[BranchPredictionResp, Parameters, Tuple2[Seq[BasePredictor], BranchPredictionResp]] =
     ((resp_in: BranchPredictionResp, p: Parameters) => {
       val ftb = Module(new FTB()(p))
