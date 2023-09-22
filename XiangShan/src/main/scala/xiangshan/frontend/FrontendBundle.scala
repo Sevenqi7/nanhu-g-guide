@@ -583,6 +583,7 @@ class BranchPredictionResp(implicit p: Parameters) extends XSBundle with HasBPUC
 
   val topdown_info = new FrontendTopDownBundle
 
+  //!NOTE: 优先级设置，s3的优先级最高
   def selectedResp ={
     val res =
       PriorityMux(Seq(

@@ -90,6 +90,7 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
 
   val ways = Seq.tabulate(numWays)(w => Module(new FauFTBWay))
   // numWays * numBr
+  // !NOTE: 2bit饱和计数器
   val ctrs = Seq.tabulate(numWays)(w => Seq.tabulate(numBr)(b => RegInit(2.U(2.W))))
   val replacer = ReplacementPolicy.fromString("plru", numWays)
   val replacer_touch_ways = Wire(Vec(2, Valid(UInt(log2Ceil(numWays).W))))
@@ -109,6 +110,7 @@ class FauFTB(implicit p: Parameters) extends BasePredictor with FauFTBParams {
     fp.hit := DontCare
     fp.fromFtbEntry(e, s1_pc)
     for (i <- 0 until numBr) {
+      //!NOTE：根据饱和计数器的值或总是跳转标志位更新预测结果
       fp.br_taken_mask(i) := c(i)(1) || e.always_taken(i)
     }
   }

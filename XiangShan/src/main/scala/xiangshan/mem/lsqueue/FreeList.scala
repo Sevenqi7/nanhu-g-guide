@@ -22,6 +22,7 @@ import utils._
 import utility._
 import xiangshan._
 
+//!NOTE: 其实就是个循环队列
 class FreeList(size: Int, allocWidth: Int, freeWidth: Int, enablePreAlloc: Boolean = false, moduleName: String = "")(implicit p: Parameters) extends XSModule
   with HasCircularQueuePtrHelper
   with HasPerfEvents

@@ -85,6 +85,7 @@ trait BPUUtils extends HasXSParameter {
   }
 
   // To be verified
+  // !NOTE: 更新饱和计数器
   def satUpdate(old: UInt, len: Int, taken: Bool): UInt = {
     val oldSatTaken = old === ((1 << len)-1).U
     val oldSatNotTaken = old === 0.U
@@ -253,6 +254,7 @@ class Predictor(implicit p: Parameters) extends XSModule with HasBPUConst with H
 
   def numOfStage = 3
   require(numOfStage > 1, "BPU numOfStage must be greater than 1")
+  //!NOTE: 阻塞原因
   val topdown_stages = RegInit(VecInit(Seq.fill(numOfStage)(0.U.asTypeOf(new FrontendTopDownBundle))))
   dontTouch(topdown_stages)
 

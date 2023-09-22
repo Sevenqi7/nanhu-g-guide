@@ -20,11 +20,14 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.util._
 
+//!NOTE: entries：循环队列的大小
 class CircularQueuePtr[T <: CircularQueuePtr[T]](val entries: Int) extends Bundle {
 
   def this(f: Parameters => Int)(implicit p: Parameters) = this(f(p))
 
   val PTR_WIDTH = log2Up(entries)
+
+//!NOTE: 似乎是溢出的标志
   val flag = Bool()
   val value = UInt(PTR_WIDTH.W)
 
@@ -32,6 +35,9 @@ class CircularQueuePtr[T <: CircularQueuePtr[T]](val entries: Int) extends Bundl
     p"$flag:$value"
   }
 
+//!NOTE: 这个重载对不同情况下的entries有重载
+//!NOTE: 当entries的大小是2的幂次方时，循环队列的下一个位置就是value + v，这种情况下溢出时会自动移回队首
+//!NOTE: 其他情况下需要计算value + v是否大于entries（diff），若超过了entries则需要反转flag。
   final def +(v: UInt): T = {
     val entries = this.entries
     val new_ptr = Wire(this.asInstanceOf[T].cloneType)
