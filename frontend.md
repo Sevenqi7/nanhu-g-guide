@@ -124,10 +124,11 @@ trait FTBParams extends HasXSParameter with HasBPUConst {
   val numSets    = numEntries/numWays // 512
   val tagSize    = 20
     
+  //三个用于计算跳转地址的状态位
   val TAR_STAT_SZ = 2
-  def TAR_FIT = 0.U(TAR_STAT_SZ.W)
-  def TAR_OVF = 1.U(TAR_STAT_SZ.W)
-  def TAR_UDF = 2.U(TAR_STAT_SZ.W)
+  def TAR_FIT = 0.U(TAR_STAT_SZ.W)		//TARET_FITTING
+  def TAR_OVF = 1.U(TAR_STAT_SZ.W)		//TARGET_OVERFLOW
+  def TAR_UDF = 2.U(TAR_STAT_SZ.W)		//TARGET_UNDERFLOW
 
   //不同分支指令的偏移量位宽
   def BR_OFFSET_LEN = 12	
@@ -144,7 +145,50 @@ trait FTBParams extends HasXSParameter with HasBPUConst {
   - end为从start开始的预测宽度范围内第三条分支指令的PC
   - end是一条无条件跳转分支指令的吓一跳指令的PC，同时它在从start开始的预测宽度范围内
 
-FTB所使用的存储表定义在class FTB内定义并实例化，名称为FTBBank，其参数和行为与FauBTB类似，FTB的行为如下：
+FTB所使用的存储表定义在class FTB内定义并实例化，名称为FTBBank。表中存放的数据结构为FTBEntryWithTAG，这个类只是在另一个名为FTBEntry的类的基础上添加了tag段。FTBEntry的结构定义如下：
+
+```scala
+class FTBEntry(implicit p: Parameters) extends XSBundle with FTBParams with BPUUtils {
+  val valid       = Bool()		//valid：表项有效位
+  val brSlots = Vec(numBrSlot, new FtbSlot(BR_OFFSET_LEN))	//brSlots：分支指令的预测跳转地址
+  val tailSlot = new FtbSlot(JMP_OFFSET_LEN, Some(BR_OFFSET_LEN))	//tailSlot: 预测块的结束地址
+
+  // Partial Fall-Through Address
+  val pftAddr     = UInt(log2Up(PredictWidth).W)	//下一个预测块的低位地址，当预测结果为not taken时，下一个预测块的起始地址为Cat(高位PC, pftAddr, 0.U(log2Ceil(指令占用字节数)).W)。若carry为1.B，则高位PC需要进位（即起始地址为Cat(高位PC+1, pftAddr, ...)）
+  val carry       = Bool()			//用于计算下一个预测块
+  val isCall      = Bool()			//跳转指令的类型
+  val isRet       = Bool()
+  val isJalr      = Bool()
+  val last_may_be_rvi_call = Bool()	//疑似是判断是否为压缩后的call指令
+
+  val always_taken = Vec(numBr, Bool())	//预测跳转总是发生的计数器，当该位为1时，预测对应的跳转指令结果为总是跳转，此时不以其结果训练预测器；
+   //当遇到不跳转情况时，将该位置0
+
+	//这里省略了类中定义的其它函数
+}
+```
+
+与一般BTB中直接存储跳转的目的地址不同，FTBEntry只存储地址的低位（pftAddr），并将其与高位拼接来得到下一个预测块的起始地址。当预测结果为not taken时，下一个取指块的地址就由ptfAddr和当前预测块的PC高位拼接得到。这段设计来自于论文《A scalable front-end architecture for fast instruction delivery》。
+
+跳转地址的存储使用了另一个数据结构FtbSlot：
+
+```scala
+class FtbSlot(val offsetLen: Int, val subOffsetLen: Option[Int] = None)(implicit p: Parameters) extends XSBundle with FTBParams {
+  if (subOffsetLen.isDefined) {
+    require(subOffsetLen.get <= offsetLen)
+  }
+  val offset  = UInt(log2Ceil(PredictWidth).W)	
+  val lower   = UInt(offsetLen.W)
+  val tarStat = UInt(TAR_STAT_SZ.W)
+  val sharing = Bool()
+  val valid   = Bool()
+
+  val sc      = Bool() // 用于预取
+  	//这里省略了类中定义的其它函数
+}
+```
+
+其参数和行为与FauBTB类似，FTB的行为如下：
 
 当没有update行为发生时：
 
@@ -156,15 +200,17 @@ s1流水级：
 
 - 将req_tag内的值与表项中的tag对比，记录命中情况s1_hit
 - 若s1_fire有效，锁存住s1_hit的值到s2_hit中
-- 若s1_fire
+- 若s1_fire有效，将从FTB读出的信息锁存至ftb_entry中
 
 s2流水级：
 
-- 当s1_hit有效且s1阶段读出的FTB表项中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置预测结果为发生跳转。
+- 当s2_hit有效且s1阶段读出的FTB表项中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置s2的br+taken_mask为1，表示预测发生跳转。
+- 若s2_fire有效，锁存s2_hit的值到s3_hit中
+- 若s2_fire有效，锁存ftb_entry的值到s3_ftb_entry中
 
 s3流水级：
 
-- 
+- 当
 
 
 
