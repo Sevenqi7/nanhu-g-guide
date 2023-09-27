@@ -200,7 +200,8 @@ class FtbSlot(val offsetLen: Int, val subOffsetLen: Option[Int] = None)(implicit
 
 s0流水级：
 
-- 将s0_pc（最新的预测块的起始地址）的tag段锁存至req_tag内
+- 将s0_pc（最新的预测块的起始地址）的tag段和Index段分别锁存至req_tag和req_idx内
+- 以s0_pc的Index段向FTB使用的SRAM发送读请求。
 
 s1流水级：
 
@@ -220,11 +221,16 @@ s3流水级：
 
 当update_valid为1时：
 
-- 若u_meta.hit为0（分支指令的实际结果为not taken）
+- u_meta.hit为1时，update_now为1，此时writeWay由u_meta.writeWay给出，将数据直接写入FTB中：
+
+- u_meta.hit为0时，update_now为0，此时writeWay依赖于tag对比。注意由于FTB使用的是单端口SRAM，故在此需要通过将s1_ready置0以阻塞流水线来实现u_req_tag和表项中tag的比较。SRAM的写行为需要在tag对比完成之后，因此update.pc，update.entry和SRAM的写有效信号均需要延迟两周期（在代码中为delay2_pc，delay2_entry）。
   - s0流水级：
-    - 将update_pc的tag段锁存至u_req_tag内
+    - 将update_pc的tag段锁存至u_req_tag内。
+    - 由于流水线阻塞，req_tag和req_idx保留原来的值。
   - s1流水级：
     - 将u_req_tag与表项中的tag段对比，记命中情况为u_hit
+    - 由于流水线阻塞，req_tag和req_idx保留原来的值。
+  - s2流水级：
     - 
 
 ​	
