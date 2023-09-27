@@ -145,7 +145,7 @@ trait FTBParams extends HasXSParameter with HasBPUConst {
   - end为从start开始的预测宽度范围内第三条分支指令的PC
   - end是一条无条件跳转分支指令的吓一跳指令的PC，同时它在从start开始的预测宽度范围内
 
-FTB所使用的存储表定义在class FTB内定义并实例化，名称为FTBBank。表中存放的数据结构为FTBEntryWithTAG，这个类只是在另一个名为FTBEntry的类的基础上添加了tag段。FTBEntry的结构定义如下：
+FTB所使用的存储表定义在class FTB内定义并实例化，名称为FTBBank。表中存放的数据结构为FTBEntryWithTAG，这个类只是在另一个名为FTBEntry的类的基础上添加了tag段。FTBEntry的结构定义位于FrontendBundle.scala中，内容如下：
 
 ```scala
 class FTBEntry(implicit p: Parameters) extends XSBundle with FTBParams with BPUUtils {
@@ -173,24 +173,30 @@ class FTBEntry(implicit p: Parameters) extends XSBundle with FTBParams with BPUU
 跳转地址的存储使用了另一个数据结构FtbSlot：
 
 ```scala
+//offsetLen: 不同分支指令的跳转偏移长度，有JMP_OFFSET_LEN（20位）和BR_OFFSET_LEN（12位）两种值
+//subOffsetLen: 目前只见于FTBEntry中的tailSlot里使用
 class FtbSlot(val offsetLen: Int, val subOffsetLen: Option[Int] = None)(implicit p: Parameters) extends XSBundle with FTBParams {
   if (subOffsetLen.isDefined) {
     require(subOffsetLen.get <= offsetLen)
   }
-  val offset  = UInt(log2Ceil(PredictWidth).W)	
-  val lower   = UInt(offsetLen.W)
-  val tarStat = UInt(TAR_STAT_SZ.W)
-  val sharing = Bool()
-  val valid   = Bool()
+  val offset  = UInt(log2Ceil(PredictWidth).W)	//
+  val lower   = UInt(offsetLen.W)		//跳转的偏移量
+  val tarStat = UInt(TAR_STAT_SZW)		//跳转目标的类型
+  val sharing = Bool()					//若slot中存储的是预测块内能够预测的最后一条条件分支指令（第numBr条分支指令），该位置为1
+  val valid   = Bool()					
 
   val sc      = Bool() // 用于预取
   	//这里省略了类中定义的其它函数
 }
 ```
 
-其参数和行为与FauBTB类似，FTB的行为如下：
+跳转的目标地址依旧是由PC的高位和偏移量拼接完成，不过与fall-through addr不同的是跳转的方向可以是向上也可以是向下的，因此需要一个tarStat状态位指示PC高位是否需要+1或-1。如一个jal指令的预测跳转地址计算方式应该是**Cat(**  PC高位, lower(offLen-1, 0), 0.U(1.W)  **)** 。
 
-当没有update行为发生时：
+
+
+其他诸如查询和更新的行为就与FauBTB比较类似了，FTB的行为如下：
+
+当update_valid为0时：
 
 s0流水级：
 
@@ -204,13 +210,21 @@ s1流水级：
 
 s2流水级：
 
-- 当s2_hit有效且s1阶段读出的FTB表项中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置s2的br+taken_mask为1，表示预测发生跳转。
+- 当s2_hit有效且ftb_entry中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置s2的br+taken_mask为1，表示预测发生跳转。
 - 若s2_fire有效，锁存s2_hit的值到s3_hit中
 - 若s2_fire有效，锁存ftb_entry的值到s3_ftb_entry中
 
 s3流水级：
 
-- 当
+- 当s3_hit有效且s3_ftb_entry中的always_taken域有效，或从TAGE预测器传入的预测信息中s3的预测信息表示预测发生跳转时，设置s3的br_taken_mask为1，表示预测发生跳转。
 
+当update_valid为1时：
 
+- 若u_meta.hit为0（分支指令的实际结果为not taken）
+  - s0流水级：
+    - 将update_pc的tag段锁存至u_req_tag内
+  - s1流水级：
+    - 将u_req_tag与表项中的tag段对比，记命中情况为u_hit
+    - 
 
+​	

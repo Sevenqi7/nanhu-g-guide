@@ -166,12 +166,14 @@ class FTBEntry(implicit p: Parameters) extends XSBundle with FTBParams with BPUU
     this.tailSlot.setLowerStatByTarget(pc, target, false)
   }
 
+  //!NOTE: 获取跳转到的预测块的PC区间
   def getTargetVec(pc: UInt, last_stage: Option[Tuple2[UInt, Bool]] = None) = {
     VecInit((brSlots :+ tailSlot).map(_.getTarget(pc, last_stage)))
   }
 
   def getOffsetVec = VecInit(brSlots.map(_.offset) :+ tailSlot.offset)
   def isJal = !isJalr
+  //!NOTE: 获取不跳转时的下一个预测块起始地址
   def getFallThrough(pc: UInt) = getFallThroughAddr(pc, carry, pftAddr)
   def hasBr(offset: UInt) =
     brSlots.map{ s => s.valid && s.offset <= offset}.reduce(_||_) ||
@@ -437,7 +439,7 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
   io.out.last_stage_meta := RegEnable(RegEnable(FTBMeta(writeWay.asUInt(), s1_hit, GTimer()).asUInt(), io.s1_fire), io.s2_fire)
 
   // always taken logic
-  for (i <- 0 until numBr) {
+  for (i <- 0 until numBr) {        //!NOTE: resp_in(0)来自于TAGE预测器。见Parameter.scala的getComponents函数
     io.out.s2.full_pred.br_taken_mask(i) := io.in.bits.resp_in(0).s2.full_pred.br_taken_mask(i) || s2_hit && ftb_entry.always_taken(i)
     io.out.s3.full_pred.br_taken_mask(i) := io.in.bits.resp_in(0).s3.full_pred.br_taken_mask(i) || s3_hit && s3_ftb_entry.always_taken(i)
   }
