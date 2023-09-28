@@ -256,8 +256,10 @@ object HoldUnless {
 
 2.GE（GEoimetrical）
 
-主流观点认为一般global history match的长度越多，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过userful counter 反映出来。
+​	主流观点认为一般global history match的长度越多，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过userful counter 反映出来。
 
 更详细的原理介绍参见[这篇专栏](https://zhuanlan.zhihu.com/p/621735156)。
 
 ![image-20230928011245260](./images/frontend/image-20230928011245260.png)
+
+​	图中的base predictor就是一个简单的由饱和计数器组成的预测器
