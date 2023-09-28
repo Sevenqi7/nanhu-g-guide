@@ -226,11 +226,38 @@ s3流水级：
 - u_meta.hit为0时，update_now为0，此时writeWay依赖于tag对比。注意由于FTB使用的是单端口SRAM，故在此需要通过将s1_ready置0以阻塞流水线来实现u_req_tag和表项中tag的比较。SRAM的写行为需要在tag对比完成之后，因此update.pc，update.entry和SRAM的写有效信号均需要延迟两周期（在代码中为delay2_pc，delay2_entry）。
   - s0流水级：
     - 将update_pc的tag段锁存至u_req_tag内。
+    - 以uodate_pc的index段为地址向SRAM发送读请求。
     - 由于流水线阻塞，req_tag和req_idx保留原来的值。
   - s1流水级：
-    - 将u_req_tag与表项中的tag段对比，记命中情况为u_hit
+    - 将u_req_tag与表项中的tag段对比，记命中情况为u_hit。
     - 由于流水线阻塞，req_tag和req_idx保留原来的值。
   - s2流水级：
-    - 
+    - 若未命中，则分配一个新的way写入更新信息。
+    - 若命中，则将更新信息写入命中的way中。
+    - 流水线阻塞解除，req_tag和reg_idx按照s0_pc更新。
 
-​	
+​	FTB使用的SRAM从接受读请求到返回数据需要两个周期，因此当update_valid刚置为1时，s0级已发送的请求在s1所返回的预测数据就可能因为流水线阻塞的原因而丢失。为了避免这种情况发生，香山会在发生update的时候将读出来的预测信息暂时锁存住，直到流水线阻塞解除。这在代码层面上通过object HoldUnless完成：
+
+```scala
+val pred_rdata   = HoldUnless(ftb.io.r.resp.data, RegNext(io.req_pc.valid && !io.update_access))	
+//当req_pc.valid && !update_access为0时，保存原值；为1时pred_rdata = ftb.io.r.resp.data
+
+//原型
+object HoldUnless {
+  def apply[T <: Data](x: T, en: Bool): T = Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
+}
+```
+
+##### 3.TAGE预测器
+
+​	TAGE（Tagged GEometrical Length Predictor）分支预测是综合O-GEHL分支预测和PPM-like分支预测所设计的分支预测算法。由base predictor T0，和一序列（partially）tagged predictor components Ti组成，tagged predictor components Ti所采用索引历史长度是不同的，成几何长度关系。从它的名称上就可以看出来设计上的特点：
+
+1.TA（Taged），由于分支预测的索引通常为PC或者PC和全局历史的hash值，一般为了提高存储效率PC只有部分段用于索引，因此会有造成别名（aliasing），TAGE中带有tag的设计能够更好地处理这一问题。
+
+2.GE（GEoimetrical）
+
+主流观点认为一般global history match的长度越多，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过userful counter 反映出来。
+
+更详细的原理介绍参见[这篇专栏](https://zhuanlan.zhihu.com/p/621735156)。
+
+![image-20230928011245260](./images/frontend/image-20230928011245260.png)
