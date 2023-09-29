@@ -152,6 +152,7 @@ class TageBTable(implicit p: Parameters) extends XSModule with TBTParams{
    // val update  = Input(new TageUpdate)
   })
 
+  //!NOTE: TableAddr用于将PC划分为不同段，第一个参数为IDX的宽度
   val bimAddr = new TableAddr(log2Up(BtSize), instOffsetBits)
 
   val bt = Module(new SRAMTemplate(UInt(2.W), set = BtSize, way=numBr, shouldReset = true, holdRead = true, bypassWrite = true))
@@ -642,6 +643,7 @@ class Tage(implicit p: Parameters) extends BaseTage {
       tableInfo.tableIdx := idx.U(log2Ceil(TageNTables).W)
       (r.valid, tableInfo)
     }}
+    //!NOTE: 选择历史最长的预测结果
     val providerInfo = ParallelPriorityMux(inputRes.reverse)
     val provided = inputRes.map(_._1).reduce(_||_)
     // val altProvided = selectedInfo.hasTwo
@@ -704,6 +706,7 @@ class Tage(implicit p: Parameters) extends BaseTage {
     val updateProvider     = updateMeta.providers(i).bits
     val updateProviderResp = updateMeta.providerResps(i)
     val updateProviderCorrect = updateProviderResp.ctr(TageCtrBits-1) === updateTaken
+    //!NOTE: 是否使用备选逻辑
     val updateUseAlt = updateMeta.altUsed(i)
     val updateAltDiffers = updateMeta.altDiffers(i)
     val updateAltIdx = use_alt_idx(update.pc)

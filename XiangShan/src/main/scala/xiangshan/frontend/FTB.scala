@@ -453,7 +453,8 @@ class FTB(implicit p: Parameters) extends BasePredictor with FTBParams with BPUU
   val delay2_pc = DelayN(update.pc, 2)
   val delay2_entry = DelayN(update.ftb_entry, 2)
 
-  
+  //!NOTE: u_meta.hit有效时
+  writeWay由u_meta.writeWay给出
   val update_now = u_valid && u_meta.hit
   val update_need_read = u_valid && !u_meta.hit
   // stall one more cycle because we use a whole cycle to do update read tag hit

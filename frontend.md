@@ -57,7 +57,7 @@ class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst
   val s1_fire = Input(Bool())		
   val s2_fire = Input(Bool())
   val s3_fire = Input(Bool())
-
+									//越靠后完成预测的预测器越精准
   val s2_redirect = Input(Bool())
   val s3_redirect = Input(Bool())
 
@@ -65,8 +65,8 @@ class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst
   val s2_ready = Output(Bool())
   val s3_ready = Output(Bool())
 
-  val update = Flipped(Valid(new BranchPredictionUpdate))
-  val redirect = Flipped(Valid(new BranchPredictionRedirect))
+  val update = Flipped(Valid(new BranchPredictionUpdate))		//从FTQ传入的更新信息
+  val redirect = Flipped(Valid(new BranchPredictionRedirect))	//重定向信息
 }
 ```
 
@@ -83,6 +83,7 @@ trait FauFTBParams extends HasXSParameter with HasBPUConst {
   val numWays = 32
   val tagSize = 16
 
+  //在uBTB中未使用
   val TAR_STAT_SZ = 2
   def TAR_FIT = 0.U(TAR_STAT_SZ.W)
   def TAR_OVF = 1.U(TAR_STAT_SZ.W)
@@ -211,7 +212,7 @@ s1流水级：
 
 s2流水级：
 
-- 当s2_hit有效且ftb_entry中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置s2的br+taken_mask为1，表示预测发生跳转。
+- 当s2_hit有效且ftb_entry中的always_taken域有效，或者从TAGE预测器传入的预测信息中s2的预测信息表示预测发生跳转时，设置s2的br_taken_mask为1，表示预测发生跳转。
 - 若s2_fire有效，锁存s2_hit的值到s3_hit中
 - 若s2_fire有效，锁存ftb_entry的值到s3_ftb_entry中
 
@@ -252,14 +253,22 @@ object HoldUnless {
 
 ​	TAGE（Tagged GEometrical Length Predictor）分支预测是综合O-GEHL分支预测和PPM-like分支预测所设计的分支预测算法。由base predictor T0，和一序列（partially）tagged predictor components Ti组成，tagged predictor components Ti所采用索引历史长度是不同的，成几何长度关系。从它的名称上就可以看出来设计上的特点：
 
-1.TA（Taged），由于分支预测的索引通常为PC或者PC和全局历史的hash值，一般为了提高存储效率PC只有部分段用于索引，因此会有造成别名（aliasing），TAGE中带有tag的设计能够更好地处理这一问题。
+1.TA（Taged）:
+
+​	由于分支预测的索引通常为PC或者PC和全局历史的hash值，一般为了提高存储效率PC只有部分段用于索引，因此会有造成别名（aliasing），TAGE中带有tag的设计能够更好地处理这一问题。
 
 2.GE（GEoimetrical）
 
-​	主流观点认为一般global history match的长度越多，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过userful counter 反映出来。
+​	主流观点认为一般global history match的长度越大，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过useful counter 反映出来。
 
 更详细的原理介绍参见[这篇专栏](https://zhuanlan.zhihu.com/p/621735156)。
 
 ![image-20230928011245260](./images/frontend/image-20230928011245260.png)
 
-​	图中的base predictor就是一个简单的由饱和计数器组成的预测器
+​	图中的base predictor就是一个简单的由饱和计数器组成的预测器，当所有bank都没有命中时就会采用base predictor的预测结果。香山中的base predictor实现位于xiangshan/frontend/Tage.scala中的TageBTable类，其他的历史预测器使用的是TageTable类。其时序关系比较简单，第一个周期以s0_pc的idx段向SRAM发读请求，第二周期就可以收到返回的预测数据。
+
+s0流水级：
+
+
+
+​	
