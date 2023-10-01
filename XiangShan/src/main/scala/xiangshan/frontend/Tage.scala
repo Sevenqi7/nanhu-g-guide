@@ -304,6 +304,7 @@ class TageTable
   // val s1_pc = io.req.bits.pc
   val req_unhashed_idx = getUnhashedIdx(io.req.bits.pc)
 
+  //!NOTE: TAGE中的useful域
   val us = Module(new FoldedSRAMTemplate(Bool(), set=nRowsPerBr, width=uFoldedWidth, way=numBr, shouldReset=true, extraReset=true, holdRead=true, singlePort=true))
   us.extra_reset.get := io.update.reset_u.reduce(_||_)
 
@@ -348,6 +349,7 @@ class TageTable
   val per_br_hit = VecInit((0 until numBr).map(i => Mux1H(UIntToOH(get_phy_br_idx(s1_unhashed_idx, i), numBr), hit_selected)))
   val per_br_u    = VecInit((0 until numBr).map(i => Mux1H(UIntToOH(get_phy_br_idx(s1_unhashed_idx, i), numBr), us.io.r.resp.data)))
 
+//!NOTE: 输出各个分支指令的预测数据
   for (i <- 0 until numBr) {
     io.resps(i).valid := per_br_hit(i)
     io.resps(i).bits.ctr := per_br_resp(i).ctr

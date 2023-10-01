@@ -264,6 +264,7 @@ trait HasSC extends HasSCParameter with HasPerfEvents { this: Tage =>
     // for sc ctrs
     def getCentered(ctr: SInt): SInt = Cat(ctr, 1.U(1.W)).asSInt
     // for tage ctrs, (2*(ctr-4)+1)*8
+    //?: 为什么要centered？
     def getPvdrCentered(ctr: UInt): SInt = Cat(ctr ^ (1 << (TageCtrBits-1)).U, 1.U(1.W), 0.U(3.W)).asSInt
 
     val scMeta = resp_meta.scMeta.get

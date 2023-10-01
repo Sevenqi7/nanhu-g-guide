@@ -10,7 +10,7 @@
 
 #### （一）.分支预测单元（Branch Prediction Unit）
 
-​	BPU的具体实现模块为xiangshan/frontend/BPU.scala中的Predictor类，此外还有一个FakePredictor模块，该模块是一个“假”的分支预测单元，当要预测的PC到来时只会空转三个周期，last_stage_meta信号恒为0，
+​	BPU的具体实现模块为xiangshan/frontend/BPU.scala中的Predictor类，此外还有一个FakePredictor模块，该模块是一个“假”的分支预测单元，当要预测的PC到来时只会空转三个周期，last_stage_meta信号恒为0。
 
 ​	BPU的参数设置在BPU.scala的HasBPUConst中，内容如下：
 
@@ -70,6 +70,16 @@ class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst
 }
 ```
 
+​	顶层模块BPU主要完成对各个分支预测子模块的实例化，流水线的管理以及全局分支历史的管理。全局分支历史管理通过一个优先多路选择器实现，由于对分支指令结果的预测是从s0流水级开始的，全局历史的选择也在这一流水级内进行。s0_fold_gh的来源按照优先级从低到高排序结果如下：
+
+| 选择信号          | 来源             | 优先级 | 备注                                      |
+| ----------------- | ---------------- | ------ | ----------------------------------------- |
+| true              | s0_folded_gh_reg | 0      | 流水线阻塞                                |
+| do_redirect.valid | update_ptr       | 2      | 发生新的重定向请求                        |
+| s3_redirect       | s3_predict_fh    | 3      | s3级的重定向请求                          |
+| s1_valid          | s1_predicted_fh  | 4      | s1_valid在代码中被初始化为0，未见其它赋值 |
+| s2_redirect       | s2_predicted_fh  | 5      | s2级的重定向请求                          |
+
 
 
 ##### 1.微目标地址缓存（Micro Branch Target Buffer）
@@ -127,7 +137,7 @@ trait FTBParams extends HasXSParameter with HasBPUConst {
     
   //三个用于计算跳转地址的状态位
   val TAR_STAT_SZ = 2
-  def TAR_FIT = 0.U(TAR_STAT_SZ.W)		//TARET_FITTING
+  def TAR_FIT = 0.U(TAR_STAT_SZ.W)		//TARGET_FITTING
   def TAR_OVF = 1.U(TAR_STAT_SZ.W)		//TARGET_OVERFLOW
   def TAR_UDF = 2.U(TAR_STAT_SZ.W)		//TARGET_UNDERFLOW
 
@@ -169,7 +179,7 @@ class FTBEntry(implicit p: Parameters) extends XSBundle with FTBParams with BPUU
 }
 ```
 
-与一般BTB中直接存储跳转的目的地址不同，FTBEntry只存储地址的低位（pftAddr），并将其与高位拼接来得到下一个预测块的起始地址。当预测结果为not taken时，下一个取指块的地址就由ptfAddr和当前预测块的PC高位拼接得到。这段设计来自于论文《A scalable front-end architecture for fast instruction delivery》。
+​	与一般BTB中直接存储跳转的目的地址不同，FTBEntry只存储地址的低位（pftAddr），并将其与高位拼接来得到下一个预测块的起始地址。当预测结果为not taken时，下一个取指块的地址就由ptfAddr和当前预测块的PC高位拼接得到。这段设计来自于论文《A scalable front-end architecture for fast instruction delivery》。
 
 跳转地址的存储使用了另一个数据结构FtbSlot：
 
@@ -191,7 +201,7 @@ class FtbSlot(val offsetLen: Int, val subOffsetLen: Option[Int] = None)(implicit
 }
 ```
 
-跳转的目标地址依旧是由PC的高位和偏移量拼接完成，不过与fall-through addr不同的是跳转的方向可以是向上也可以是向下的，因此需要一个tarStat状态位指示PC高位是否需要+1或-1。如一个jal指令的预测跳转地址计算方式应该是**Cat(**  PC高位, lower(offLen-1, 0), 0.U(1.W)  **)** 。
+​	跳转的目标地址依旧是由PC的高位和偏移量拼接完成，不过与fall-through addr不同的是跳转的方向可以是向上也可以是向下的，因此需要一个tarStat状态位指示PC高位是否需要+1或-1。如一个jal指令的预测跳转地址计算方式应该是**Cat(**  PC高位, lower(offLen-1, 0), 0.U(1.W)  **)** 。
 
 
 
@@ -237,7 +247,7 @@ s3流水级：
     - 若命中，则将更新信息写入命中的way中。
     - 流水线阻塞解除，req_tag和reg_idx按照s0_pc更新。
 
-​	FTB使用的SRAM从接受读请求到返回数据需要两个周期，因此当update_valid刚置为1时，s0级已发送的请求在s1所返回的预测数据就可能因为流水线阻塞的原因而丢失。为了避免这种情况发生，香山会在发生update的时候将读出来的预测信息暂时锁存住，直到流水线阻塞解除。这在代码层面上通过object HoldUnless完成：
+​	FTB使用的SRAM从接受读请求到返回数据需要两个周期，因此当update_valid刚置为1时，s0级已发送的请求在s1所返回的预测数据就会流水线阻塞的原因而丢失。为了避免这种情况发生，香山会在发生update的时候将读出来的预测信息暂时锁存住，直到流水线阻塞解除。这在代码层面上通过object HoldUnless完成：
 
 ```scala
 val pred_rdata   = HoldUnless(ftb.io.r.resp.data, RegNext(io.req_pc.valid && !io.update_access))	
@@ -261,14 +271,92 @@ object HoldUnless {
 
 ​	主流观点认为一般global history match的长度越大，预测就越准确。所以TAGE选取了几何增长的history长度，如32，64，128，256。原则上，每次优先选取最长的match做预测。当然也有一些简单地branch可能不需要那么长，短的就好。TAGE的userful counter 就发挥了作用。如果短的history predict的效果就很好，就会通过useful counter 反映出来。
 
-更详细的原理介绍参见[这篇专栏](https://zhuanlan.zhihu.com/p/621735156)。
+更详细的原理介绍参见[这篇专栏](https://zhuanlan.zhihu.com/p/621735156)或[这篇论文](https://jilp.org/cbp2014/paper/AndreSeznec.pdf#:~:text=The%20submitted%20256Kbits%20TAGE-SC-L%20predictor%20features%20a%20TAGE,predictor%20achieves%202.365%20MPKI%20on%20the%20CBP-4%20traces.)。
 
 ![image-20230928011245260](./images/frontend/image-20230928011245260.png)
 
-​	图中的base predictor就是一个简单的由饱和计数器组成的预测器，当所有bank都没有命中时就会采用base predictor的预测结果。香山中的base predictor实现位于xiangshan/frontend/Tage.scala中的TageBTable类，其他的历史预测器使用的是TageTable类。其时序关系比较简单，第一个周期以s0_pc的idx段向SRAM发读请求，第二周期就可以收到返回的预测数据。
+​	图中的base predictor就是一个简单的由饱和计数器组成的预测器，当所有bank都没有命中时就会采用base predictor的预测结果。香山中的base predictor实现位于xiangshan/frontend/Tage.scala中的TageBTable类。其他的Tagged Predictor使用的是TageTable类，被称为Provider。
+
+​	在没有发生update的情况下，TAGE的时序逻辑比较简单，只需要以s0_pc的idx段和tag段索引SRAM，在s1读出预测数据并选择历史长度最长的预测器的预测结果，该预测器被称为provider。如果没有命中任何预测器，则会使用base predictor的预测结果。此外，香山还参考了[这篇论文](https://www.irisa.fr/caps/people/seznec/L-TAGE.pdf)实现了一个**备选预测（Alternative Provider)**的逻辑。备选预测（altpred）是命中的预测器中具有第二长度的预测器（若没有命中则为base predictor）。论文中提到在一些情况下（比如最长历史项是刚刚分配出来的新项）altpred的结果比provider要更准确，因此还设置了一个USE_ALT_ON_NA寄存器，用以指示是否使用备选预测器的预测结果。香山中处于时序的考虑，始终使用base predictor作为备选预测的结果。
+
+​	注意香山中的TAGE预测器与FTB一样，能够同时预测numBr条（目前numBr = 2）分支指令的结果，因此TAGE的预测表中一个表项也最多能够存储两条分支指令的结果。同时，香山的TAGE内没有存储分支指令的跳转地址（这个功能已经由FTB完成了），TAGE只是简单地预测分支是否发生（taken or not）。
 
 s0流水级：
 
+- Base Predictor：
+
+  - 直接以s0_pc的idx段（s0_idx）为地址访问base predictor使用的预测表。
+
+  - 当s0_fire有效时，锁存s0_idx到s1_idx中。
+
+- Tagged Predictor：
+
+  - 将s0_pc与分支表的历史进行异或hash得到s0_idx，用于索引预测表。
+  - 将s0_pc与分支表的历史进行异或hash得到s0_tag。
+  - 当s0_fire有效时，分别锁存s0_idx和s0_tag到s1_idx和s1_tag中。
+
+- 在Tage的顶层模块中还涉及到如下信号：
+
+  - provided:   是否命中至少一个Tagged Predictor。
+  - providerInfo: 命中的Tagged Predictor的index以及预测数据，若无命中
+
+s1流水级：
+
+- Base Predictor：
+
+  - 直接输出预测表中的预测数据。
+
+- Tagged Predictor:
+
+  - 将s1_tag与预测表中的tag对比，记录每条分支指令（至多numBr条）的命中情况为per_br_hit。
+
+  - 根据per_br_hit和预测表中的值输出预测数据
+
+    ```scala
+      for (i <- 0 until numBr) {
+        io.resps(i).valid := per_br_hit(i)		
+        io.resps(i).bits.ctr := per_br_resp(i).ctr	//饱和计数器
+        io.resps(i).bits.u := per_br_u(i)	//useful域
+        io.resps(i).bits.unconf := per_br_unconf(i)
+      }
+    ```
+
+- 在Tage的顶层模块中还涉及到如下信号：
+
+  - s1_provideds:  锁存自provided
+  - s1_providers:  命中的历史最长的预测器的编号（index），锁存自providerInfo.tableIndex。
+  - s1_altUsed: 是否使用备选逻辑。当provided为0或USE_ALT_ON_NA指示使用备选预测时，在下一周期被置为1。
+  - s1_baseCnt: 锁存自从base predictor中读出的饱和计数器的值。
+  - s1_finalAltPreds: 备选逻辑的预测结果。锁存自从base predictor中读出的饱和计数器的最高位。
+  - s1_tageTakens: 预测结果，为1表示taken。当s1_altUsed为1时，取base predictor的预测结果。否则取providerInfo中的预测结果。
+
+s2流水级：
+
+- 将s1级的各信号锁存一拍，对外输出预测结果
 
 
-​	
+  **TAGE的更新：待补充**
+
+​		实际上TAGE预测器在应用上除了与SC（statistical corrector，统计校正器）搭配以外还经常与循环预测器搭配使用，组成TAGE-SC-L预测器，如下图所示。香山在南湖架构中舍弃了循环预测器，因为南湖架构中的分支预测单元是以预测块为单位进行预测，一条分支指令可能会存在于多个FTB项内，统计一条分支指令的循环次数比较困难。而在雁栖湖架构中，对每一条指令都会做出预测，一条分支指令在 BTB 中只会出现一次，故没有上述的问题。
+
+![image-20230930054538857](./images/frontend/image-20230930054538857.png)
+
+##### 3.统计校正器（Statistical Corrector）
+
+​	TAGE在预测与历史较相关的分支时非常有效，但对一些有统计偏向的分支效果不佳，如一条只对一个方向有微小的偏差，但与历史路径没有强相关性的分支。统计校正器SC负责在预测这种具有统计偏向的条件分支指令并在这种情况下反转TAGE预测器的结果。
+
+##### 4.ITTAGE预测器
+
+​	ITTAGE预测器是专门用于预测间接跳转指令的预测器，其预测算法与TAGE一致，只是在预测表中加上了跳转到的目标地址，故原理在此不作重复。
+
+![image-20230930161340894](./images/frontend/image-20230930161340894.png)
+
+#### （二）取指目标队列（Fetch Target Queue）
+
+​	由于BPU在设计上与指令缓存进行了解耦，IFU和BPU所使用的PC被独立开来。而BPU中很少出现阻塞的情况，流水线的效率要大于需要访问Cache的IFU，为了最大化流水线的效率，香山设计了一个取指目标队列（FTQ）用于暂存BPU中已经完成预测的取指块，并向IFU发送取指令请求。除此之外，FTQ中还存储了BPU中各个预测器的预测信息（meta），在指令确认退休后，FTQ会将这些信息送回BPU用作预测器的训练，故它需要维护指令从预测到提交的完整的生命周期。除此之外，当后端需要指令PC时也会到FTQ中获得。
+
+#### （三）取指令单元（Instuction Fetch Unit)
+
+​	取指令单元的实现位于xiangshan/frontend/IFU.scala中。南湖架构的IFU采用了四级流水线的结构，
+
+![image-20231001060235820](./images/frontend/image-20231001060235820.png)
