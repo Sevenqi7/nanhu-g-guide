@@ -1,3 +1,21 @@
+Todo List：
+
+1. TAGE的更新逻辑
+
+2. SC的工作逻辑
+
+3. 细化BPU顶层模块的工作逻辑
+
+4. 添加关于icache的章节
+
+5. 用draoio画图帮助描述各模块的行为
+
+6. 添加模块间互动的时序描述章节
+
+7. 添加代码层次的梳理章节
+
+   
+
 ### 一.整体概览
 
 ​		根据香山文档的划分，南湖架构的前端部分包含有分支预测单元（Branch Prediction Unit)，取指目标队列（Fetch Target Queue），取指单元（IFU），指令缓存（Instruction Buffer），译码器（Decoder）和ICache，ITLB组成，下图为香山文档中给出的前端部分结构示意图。
@@ -5,6 +23,8 @@
 ![image-20230921001753465](.\images\frontend\image-20230921001753465.png)
 
 ![frontend](https://xiangshan-doc.readthedocs.io/zh_CN/latest/figs/frontend/frontend.png)
+
+​	香山南湖架构的前端设计总体上参考了《A scalable front-end architecture for fast instruction delivery》这篇论文，将取指令单元和分支预测单元解耦，分支预测只需要对大小一定的预测块的
 
 ### 二、模块分析
 
@@ -37,7 +57,7 @@ trait HasBPUConst extends HasXSParameter {
 }
 ```
 
-香山的BPU以预测块为单位进行，在默认参数下（FetchWidth=8）预测块的大小为64个字节。BPU由uBTB、FTB、TAGE-SC、RAS、ITTAGE五个模块组成，其中uBTB为只使用PC索引的目标地址的BTB（无tag对比），1周期内完成预测；FTB的结构类似于cache，用PC的高20位作为tag索引，低十二位用于索引对应的bank。FTB作为TAGE预测器中的Base Predictor，与TAGE预测器一样都是2周期完成预测。SC统计矫正器用于校正TAGE的预测结果，在TAGE不够准确时反转TAGE的预测方向。ITTAGE基本上是一个在表项上多记录了预测的跳转地址的TAGE预测器，用于预测间接跳转，和SC一样延迟都为3个周期。以下是香山文档中给出的分支预测单元流水线示意图：
+​	香山的BPU以预测块为单位进行，在默认参数下（FetchWidth=8）预测块的大小为64个字节。BPU由uBTB、FTB、TAGE-SC、RAS、ITTAGE五个模块组成，其中uBTB为只使用PC索引的目标地址的BTB（无tag对比），1周期内完成预测；FTB的结构类似于cache，用PC的高20位作为tag索引，低十二位用于索引对应的bank。FTB作为TAGE预测器中的Base Predictor，与TAGE预测器一样都是2周期完成预测。SC统计矫正器用于校正TAGE的预测结果，在TAGE不够准确时反转TAGE的预测方向。ITTAGE基本上是一个在表项上多记录了预测的跳转地址的TAGE预测器，用于预测间接跳转，和SC一样延迟都为3个周期。以下是香山文档中给出的分支预测单元流水线示意图：
 
 ![image-20230922030635681](./images/frontend/image-20230922030635681.png)
 
@@ -84,7 +104,7 @@ class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst
 
 ##### 1.微目标地址缓存（Micro Branch Target Buffer）
 
-<font color=#FF0000 >香山的官方文档中提到在uBTB中摒弃了tag对比的做法，直接使用分支历史和PC的低位异或得到的结果来寻址存储表，但我在FauFTB.scala中看到这个模块仍然有tag对比的行为，本部分准确度存疑。Fa前缀可能是fake的意思。</font>
+香山的官方文档中提到在uBTB中摒弃了tag对比的做法，直接使用分支历史和PC的低位异或得到的结果来寻址存储表，但我在FauFTB.scala中看到这个模块仍然有tag对比的行为，本部分准确度存疑。Fa前缀可能是fake的意思。</font>
 
 uBTB以一整个预测块为单位，提供无气泡的简单预测，其实现位于xiangshan/frontend/FauFTB.scala中。uBTB的组成类似于cache，其参数位于一个trait FauFTBParams中：
 
@@ -335,7 +355,7 @@ s2流水级：
 - 将s1级的各信号锁存一拍，对外输出预测结果
 
 
-  **TAGE的更新：待补充**
+  <font color=#FF0000 >TAGE的更新：待补充</font>
 
 ​		实际上TAGE预测器在应用上除了与SC（statistical corrector，统计校正器）搭配以外还经常与循环预测器搭配使用，组成TAGE-SC-L预测器，如下图所示。香山在南湖架构中舍弃了循环预测器，因为南湖架构中的分支预测单元是以预测块为单位进行预测，一条分支指令可能会存在于多个FTB项内，统计一条分支指令的循环次数比较困难。而在雁栖湖架构中，对每一条指令都会做出预测，一条分支指令在 BTB 中只会出现一次，故没有上述的问题。
 
@@ -343,11 +363,13 @@ s2流水级：
 
 ##### 3.统计校正器（Statistical Corrector）
 
+<font color=#FF0000 > 《待完成》</font>
+
 ​	TAGE在预测与历史较相关的分支时非常有效，但对一些有统计偏向的分支效果不佳，如一条只对一个方向有微小的偏差，但与历史路径没有强相关性的分支。统计校正器SC负责在预测这种具有统计偏向的条件分支指令并在这种情况下反转TAGE预测器的结果。
 
 ##### 4.ITTAGE预测器
 
-​	ITTAGE预测器是专门用于预测间接跳转指令的预测器，其预测算法与TAGE一致，只是在预测表中加上了跳转到的目标地址，故原理在此不作重复。
+​	ITTAGE预测器是专门用于预测间接跳转指令的预测器，其预测算法与TAGE一致，只是在预测表中加上了跳转到的目标地址，并多延迟一拍以暂存读取出来的目标地址Target。原理在此不作重复。
 
 ![image-20230930161340894](./images/frontend/image-20230930161340894.png)
 
@@ -355,8 +377,140 @@ s2流水级：
 
 ​	由于BPU在设计上与指令缓存进行了解耦，IFU和BPU所使用的PC被独立开来。而BPU中很少出现阻塞的情况，流水线的效率要大于需要访问Cache的IFU，为了最大化流水线的效率，香山设计了一个取指目标队列（FTQ）用于暂存BPU中已经完成预测的取指块，并向IFU发送取指令请求。除此之外，FTQ中还存储了BPU中各个预测器的预测信息（meta），在指令确认退休后，FTQ会将这些信息送回BPU用作预测器的训练，故它需要维护指令从预测到提交的完整的生命周期。除此之外，当后端需要指令PC时也会到FTQ中获得。
 
+![image-20231008175339144](./images/frontend/image-20231008175339144.png)
+
+​	FTQ是一个循环队列结构，但队列中的内容是根据其自身特点存储在不同的结构中的，队列的指针并不与某个特定的存储结构绑定。FTQ主要使用的存储结构有ftq_pc_mem，ftq_pd_mem，ftq_redirect_sram，ftq_meta_1r_sram和ftb_entry_mem，其中除ftq_redirect_sram和ftq_meta_1r_sram用sram实现外都由寄存器堆实现。
+
+​	FTQ维护了bpuPtr、ifuPtr、ifuWbPtr和commPtr四个队列指针：
+
+- **bpuPtr**：当BPU发出新的预测块到FTQ时指针加一，指向最新进入FTQ的项。此时需要初始化FTQ各项的状态，并将预测信息写入存放预测信息的存储结构。若出现BPU的s2或s3流水级的预测结果覆盖当前预测结果时，需要恢复bpuPtr和ifuPtr并根据IFU中正在处理的预测块的索引号项决定是否清空IFU的各流水级。
+- **ifuPtr**：当FTQ向IFU发出取指请求时指针加一，指向最新发送请求给IFU的FTQ项。
+- **ifuWbPtr**：当IFU写回有效的预译码信息时指针加一，指向已在IFU中完成预译码的FTQ项。FTQ根据IFU写回的预译码信息有无预测错误（预测不跳转的jal、ret等）决定是否向BPU发送重定向请求并恢复bpuPtr和ifuPtr。
+- **commPtr**：每条指令于后端中提交时都会通知FTQ，当一个FTQ项内的全部指令都已顺利退休时指针加一，指向最新的已确认指令执行结果的FTQ项。BPU可以利用这些已提交的指令的执行历史来训练预测器。bpuPtr和commPtr中间的即为生命周期仍未结束的预测块。
+
+##### 1. ftq_pc_mem
+
+​	存储指令地址相关的信息，其基本构成单元为Ftq_RF_Components：
+
+```scala
+class Ftq_RF_Components(implicit p: Parameters) extends XSBundle with BPUUtils with HasBPUConst {
+  val startAddr = UInt(VAddrBits.W)				//预测块的起始地址
+  val nextLineAddr = UInt(VAddrBits.W)			//下一行地址
+  val isNextMask = Vec(PredictWidth, Bool())	//预测块
+  val fallThruError = Bool()			//推测的下一行地址是否存在错误
+  // val carry = Bool()
+    
+  //略去类内部定义的函数
+}
+```
+
+ftq_pc_mem每个周期都会存储从bpu中发送来的预测块信息。每周期默认存储uBTB（一拍出结果）的预测结果，当其他预测器的预测结果与uBTB不一致时则需要矫正。
+
+##### 2. ftq_pd_mem
+
+​	存储从IFU返回的预译码信息，其基本构成单元为Ftq_pd_Entry
+
+```scala
+class Ftq_pd_Entry(implicit p: Parameters) extends XSBundle {
+  val brMask = Vec(PredictWidth, Bool())		//每条指令是否为分支指令
+  val jmpInfo = ValidUndirectioned(Vec(3, Bool()))	//位于预测块末尾的无条件跳转指令的信息，包括是否存在，类型（jal or jalr，call or ret）等
+  val jmpOffset = UInt(log2Ceil(PredictWidth).W)	//预测块末尾无条件跳转指令的位置
+  val jalTarget = UInt(VAddrBits.W)					//预测块末尾无条件跳转指令的目标地址
+  val rvcMask = Vec(PredictWidth, Bool())			//是否为压缩指令的掩码
+  def hasJal  = jmpInfo.valid && !jmpInfo.bits(0)	
+  def hasJalr = jmpInfo.valid && jmpInfo.bits(0)
+  def hasCall = jmpInfo.valid && jmpInfo.bits(1)
+  def hasRet  = jmpInfo.valid && jmpInfo.bits(2)
+
+   //略去类中定义的其他函数
+}
+```
+
+​	写入ftq_pd_mem的内容来自于IFU的第4个流水级，存储经过预译码的指令信息。除此之外，还会以commPtr的值为地址输出预测信息，用于训练BPU中的预测器。
+
+##### 3. ftq_redirect_sram
+
+​	存储重定向时需要恢复的预测信息，如RAS和分支历史等。其基本单元构成如下：
+
+```scala
+class SpeculativeInfo(implicit p: Parameters) extends XSBundle
+  with HasBPUConst with BPUUtils {
+  val folded_hist = new AllFoldedHistories(foldedGHistInfos)			//折叠后的全局历史
+  val afhob = new AllAheadFoldedHistoryOldestBits(foldedGHistInfos)	
+  val lastBrNumOH = UInt((numBr+1).W)									
+  val histPtr = new CGHPtr											//全局历史指针（CGH，Circular Globlal History）
+  val rasSp = UInt(log2Ceil(RasSize).W)								//RAS指针
+  val rasTop = new RASEntry											//要恢复的RAS栈顶的项
+}
+```
+
+​	由于在设计上RAS要在BPU的s3流水级才给出预测结果，ftq_redirect_sram存储的是BPU的最后一个流水级内的信息。同样，ftq_redirect_sram也会以commPtr的值为地址输出全局历史信息用于训练BPU中的预测期。
+
+##### 4. ftq_meta_1r_sram
+
+​	存储其余的预测信息，即各个预测器的meta。
+
+```scala
+class Ftq_1R_SRAMEntry(implicit p: Parameters) extends XSBundle with HasBPUConst {
+  val meta = UInt(MaxMetaLength.W)
+}
+```
+
+##### 5. ftb_entry_mem
+
+​	存储预测时FTB所必须的信息，在指令于IFU提交后用于训练信的FTB项。基本构成单元为前文介绍过的FTBEntry。
+
+
+
 #### （三）取指令单元（Instuction Fetch Unit)
 
-​	取指令单元的实现位于xiangshan/frontend/IFU.scala中。南湖架构的IFU采用了四级流水线的结构，
+<font color=#FF0000 > 待完成：压缩指令的处理过程</font>
+
+​	取指令单元的实现位于xiangshan/frontend/IFU.scala中。南湖架构的IFU采用了四级流水线的结构，由于分支预测已经与取指部分解耦，取指单元的逻辑也大幅简化，只需要根据FTQ发来的请求从ICache中读取指令，再对指令进行预译码和分支预测正确性检查、MMIO检查即可。代码上该模块相对容易理解，各流水级的信号都以f[\<num\>]_\<xxx\>的形式命名，其中num为流水级的编号。详细行为如下：
 
 ![image-20231001060235820](./images/frontend/image-20231001060235820.png)
+
+从模块外输入的信息：
+
+- fromFtq，从FTQ传入的信息，主要是取指令请求
+- icacheInter，ICache的回应
+- icachePerfInfo，ICache相关的性能计数器
+- frontendTrigger，与CSR控制相关
+- rob_commits，ROB中将要退休的指令信息
+
+模块输出的信息：
+
+- toFtq，传递给FTQ的信息，主要是分支预测的检查结果
+- icacheStop，ICache的阻塞信号（MMIO访问）
+- toIbuffer，传递给指令缓存（IBuffer）的信息，主要是完成预译码的指令/扩展后的压缩指令
+
+IF0级：
+
+- 若fromFtq.valid有效，则根据预测块的起始地址和有效范围向icache发送读请求。
+- 根据取指的范围判断是否跨cache行使能f0_doubleLine信号。
+
+IF1级：
+
+- 计算指令块中每条指令对应的PC值
+
+IF2级：
+
+- 接收ICache返回的数据
+- 生成例外（page fault、access fault、mmio等）
+- 将每条指令的PC通过异或折叠得到fold_pc，用于译码阶段
+- 将去除的指令送进预译码器进行译码，同时识别16bit的压缩指令并将其扩展为32bits的指令。
+
+IF3级：
+
+- 将指令的预译码信息送入分支预测检查器。在这一阶段能够检查出来的分支预测错误有：
+  - jump类型指令不跳转：如预测块的有效范围内有jal、ret这类直接跳转指令，且分支预测给出的结果为not taken，则需要标记为预测错误。
+  - 非跳转指令预测跳转：不含跳转指令或是跳转指令不在有效范围内时分支预测给出的结果为taken
+  - 目标地址错误：部分跳转指令可从指令码出得出跳转地址（如jal），此时需要检测分支预测给出的跳转地址是否正确。
+- 若分支预测检查器检查到错误，则需要将最先发生错误的分支指令的错误信息返回给FTQ，同时清空IFU所有流水级，等待FTQ发送新的取指请求。
+- 若根据预译码结果需要从MMIO空间中取指令，则需要向MMIO模块发起取指令请求，并在MMIO模块返回指令前阻塞流水级。
+
+
+
+### 三、模块间的交互
+
+  <font color=#FF0000 >（待补充）</font>
