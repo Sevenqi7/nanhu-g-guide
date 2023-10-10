@@ -1,3 +1,5 @@
+<<<<<<< Updated upstream
+=======
 Todo List：
 
 1. TAGE的更新逻辑
@@ -24,7 +26,7 @@ Todo List：
 
 ![frontend](https://xiangshan-doc.readthedocs.io/zh_CN/latest/figs/frontend/frontend.png)
 
-​	香山南湖架构的前端设计总体上参考了《A scalable front-end architecture for fast instruction delivery》这篇论文，将取指令单元和分支预测单元解耦，分支预测只需要对大小一定的预测块的
+​	香山南湖架构的前端设计总体上参考了《A scalable front-end architecture for fast instruction delivery》这篇论文，将取指令单元和分支预测单元解耦，在中间使用FTQ进行连接，解决了传统设计上分支预测对于流水线性能影响过大的问题。
 
 ### 二、模块分析
 
@@ -104,7 +106,7 @@ class BasePredictorIO (implicit p: Parameters) extends XSBundle with HasBPUConst
 
 ##### 1.微目标地址缓存（Micro Branch Target Buffer）
 
-香山的官方文档中提到在uBTB中摒弃了tag对比的做法，直接使用分支历史和PC的低位异或得到的结果来寻址存储表，但我在FauFTB.scala中看到这个模块仍然有tag对比的行为，本部分准确度存疑。Fa前缀可能是fake的意思。</font>
+  <font color=#FF0000 >香山的官方文档中提到在uBTB中摒弃了tag对比的做法，直接使用分支历史和PC的低位异或得到的结果来寻址存储表，但我在FauFTB.scala中看到这个模块仍然有tag对比的行为，本部分准确度存疑。Fa前缀可能是fake的意思。</font>
 
 uBTB以一整个预测块为单位，提供无气泡的简单预测，其实现位于xiangshan/frontend/FauFTB.scala中。uBTB的组成类似于cache，其参数位于一个trait FauFTBParams中：
 
@@ -169,12 +171,12 @@ trait FTBParams extends HasXSParameter with HasBPUConst {
 
 根据香山的官方文档，FTB的表项满足以下特点：
 
-- FTB项由预测块的起始地址start索引，start通常为上一个预测块的end或来自BPU外部的重定向的目标地址（如异常）
+- FTB项由预测块的起始地址start索引，start通常为上一个预测块的end或来自BPU外部的重定向的目标地址（如异常返回）
 - FTB项内最多记录两条分支指令，其中第一条一定是条件分支指令
 - end一定满足以下条件之一：
   - end - start = 预测宽度
   - end为从start开始的预测宽度范围内第三条分支指令的PC
-  - end是一条无条件跳转分支指令的吓一跳指令的PC，同时它在从start开始的预测宽度范围内
+  - end是一条无条件跳转分支指令的下一跳指令的PC，同时它在从start开始的预测宽度范围内
 
 FTB所使用的存储表定义在class FTB内定义并实例化，名称为FTBBank。表中存放的数据结构为FTBEntryWithTAG，这个类只是在另一个名为FTBEntry的类的基础上添加了tag段。FTBEntry的结构定义位于FrontendBundle.scala中，内容如下：
 
@@ -318,7 +320,7 @@ s0流水级：
 - 在Tage的顶层模块中还涉及到如下信号：
 
   - provided:   是否命中至少一个Tagged Predictor。
-  - providerInfo: 命中的Tagged Predictor的index以及预测数据，若无命中
+  - providerInfo: 命中的Tagged Predictor的index以及预测数据
 
 s1流水级：
 
@@ -514,3 +516,4 @@ IF3级：
 ### 三、模块间的交互
 
   <font color=#FF0000 >（待补充）</font>
+>>>>>>> Stashed changes
